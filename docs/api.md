@@ -1,0 +1,115 @@
+# ClipWarp API 契约（M1）
+
+Server 与 Web 都以本文件为准。所有响应均为 JSON（除 204）。错误统一形如 `{ "error": "<code>", "message": "<人类可读>" }`。
+
+## 认证
+
+Session cookie：`cw_session`（httpOnly, SameSite=Lax, Path=/, 30 天）。
+未认证访问受保护接口 → `401 {"error":"unauthorized"}`。
+
+### POST /api/login
+
+请求：`{ "username": "...", "password": "...", "deviceLabel": "iPhone 15" }`（deviceLabel 可选，默认从 User-Agent 推断，如 "iPhone" / "Mac" / "Unknown"）
+- 200：`{ "account": { "id": 1, "username": "admin", "role": "admin" } }` + Set-Cookie
+- 401：`{"error":"invalid_credentials"}`
+- 429：同 IP 1 分钟内失败 ≥5 次 `{"error":"rate_limited"}`
+
+### POST /api/logout
+
+- 204，删除 session 行并清 cookie。
+
+### GET /api/me
+
+- 200：`{ "account": { "id", "username", "role" }, "deviceLabel": "..." }`
+- 401 未登录。
+
+## Clips（全部按当前 account 隔离）
+
+Clip 对象：
+
+```json
+{
+  "id": 42,
+  "content": "...",
+  "contentType": "text|json|url|code",
+  "title": null,
+  "isPinned": false,
+  "isSensitive": false,
+  "deviceLabel": "iPhone 15",
+  "createdAt": 1760000000000
+}
+```
+
+### GET /api/clips?limit=50&before=<id>
+
+倒序（最新在前）。`limit` 默认 50 最大 200；`before` 为游标（返回 id < before 的）。pinned 不影响排序（仍按 id 倒序，前端可置顶展示）。
+- 200：`{ "clips": [Clip...], "hasMore": true }`
+
+### POST /api/clips
+
+请求：`{ "content": "..." }`。服务端做规则版类型识别（见下）并记录请求 session 的 deviceLabel。
+- 201：`{ "clip": Clip }`，并向该账号所有 WS 连接广播 `clip:new`
+- 400：`{"error":"empty_content"}` 或 `{"error":"content_too_large"}`（> 1,048,576 字节 UTF-8）
+
+插入后裁剪：该账号未 pin 的 clip 只保留最新 500 条，被裁剪的不广播删除事件。
+
+### DELETE /api/clips/:id
+
+- 204，并广播 `clip:deleted`
+- 404：非本账号或不存在 `{"error":"not_found"}`
+
+### POST /api/clips/:id/pin
+
+请求：`{ "pinned": true }`
+- 200：`{ "clip": Clip }`，并广播 `clip:pinned`
+- 404 同上。
+
+### 类型识别规则（服务端，保证多端一致）
+
+1. trim 后以 `{` 或 `[` 开头且 `JSON.parse` 成功 → `json`
+2. 单行且匹配 `/^https?:\/\/\S+$/` → `url`
+3. 含换行且匹配 `/[{};]|^\s*(import |export |function |def |class |const |let |var |#include|package |fn |func )/m` → `code`
+4. 其余 → `text`
+
+## Admin（role=admin，否则 403 `{"error":"forbidden"}`）
+
+### GET /api/accounts
+- 200：`{ "accounts": [{ "id", "username", "role", "createdAt", "clipCount" }] }`
+
+### POST /api/accounts
+请求：`{ "username": "...", "password": "..." }`（username: `/^[a-zA-Z0-9_-]{2,32}$/`；password ≥ 6 位）
+- 201：`{ "account": { "id", "username", "role" } }`
+- 409：`{"error":"username_taken"}`；400 校验失败 `{"error":"invalid_username"|"weak_password"}`
+
+### DELETE /api/accounts/:id
+级联删除其 sessions 和 clips。不能删除自己、不能删除 admin 角色账号 → 400 `{"error":"cannot_delete"}`；404 不存在。
+- 204
+
+### POST /api/accounts/:id/password
+请求：`{ "password": "..." }`。重置后吊销该账号全部 session。
+- 204
+
+## WebSocket `/ws`
+
+升级时用 `cw_session` cookie 认证，未认证以 code **4401** 关闭。
+连接归入 account 房间。消息均为 JSON 文本帧。
+
+Server → Client：
+
+| type | 载荷 | 时机 |
+|---|---|---|
+| `hello` | `{ "type":"hello", "devices":[Device...] }` | 连接建立后立即 |
+| `clip:new` | `{ "type":"clip:new", "clip": Clip }` | 本账号任意设备新增 |
+| `clip:deleted` | `{ "type":"clip:deleted", "id": 42 }` | 删除 |
+| `clip:pinned` | `{ "type":"clip:pinned", "id": 42, "pinned": true }` | pin 状态变化 |
+| `presence` | `{ "type":"presence", "devices":[Device...] }` | 本账号设备上线/下线 |
+
+Device 对象：`{ "deviceLabel": "iPhone 15", "since": 1760000000000 }`（同账号当前在线 WS 连接，含自己）。
+
+Client → Server：`{ "type":"ping" }` → 回 `{ "type":"pong" }`（客户端每 30s 发一次保活；断线自动重连，指数退避上限 10s，重连成功后客户端应重新拉取 GET /api/clips 对齐状态）。
+
+## 其他
+
+- `GET /api/health` → 200 `{ "ok": true, "version": "0.1.0" }`（无需认证）
+- 生产模式下 `@fastify/static` 托管 `web/dist`，SPA fallback 到 `index.html`（`/api/*` 与 `/ws` 除外）。
+- Vite dev proxy：`/api` 和 `/ws`（ws:true）→ `http://localhost:2547`。
