@@ -89,8 +89,21 @@ echo "==> 已写入 $PLIST"
 
 # 6) (重新)加载并重启
 launchctl bootout "gui/$UID_NUM/$LABEL" 2>/dev/null || true
-sleep 1 # 等 bootout 完全释放，避免 bootstrap 撞上 "I/O error"
-launchctl bootstrap "gui/$UID_NUM" "$PLIST"
+# 旧实例释放监听 socket 需要时间；bootstrap 抢跑会报 "5: Input/output error"。
+# 带退避重试，单次 1s 往往不够（实测旧进程偶尔要 2~3s 才完全释放）。
+bootstrap_ok=0
+for attempt in 1 2 3 4 5; do
+  sleep "$attempt" # 退避：1s,2s,3s...
+  if launchctl bootstrap "gui/$UID_NUM" "$PLIST" 2>/dev/null; then
+    bootstrap_ok=1
+    break
+  fi
+  echo "==> bootstrap 第 $attempt 次未成功（旧实例 socket 仍在释放），重试…"
+  launchctl bootout "gui/$UID_NUM/$LABEL" 2>/dev/null || true
+done
+if [ "$bootstrap_ok" -ne 1 ]; then
+  echo "!! bootstrap 多次失败，请稍后手动重试: launchctl bootstrap gui/$UID_NUM $PLIST" >&2
+fi
 launchctl kickstart -k "gui/$UID_NUM/$LABEL" 2>/dev/null || true
 
 # 7) 健康检查（绑定到具体网卡时不能 curl 127.0.0.1，否则会误报失败）
