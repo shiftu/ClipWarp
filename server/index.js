@@ -12,6 +12,7 @@ import { openDb } from './src/db.js';
 import { bootstrapAdmin } from './src/accounts.js';
 import { makeAuthHook } from './src/sessions.js';
 import { createWsHub } from './src/wshub.js';
+import { createSweeper } from './src/sweeper.js';
 import registerAuthRoutes from './src/routes-auth.js';
 import registerClipRoutes from './src/routes-clips.js';
 import registerAdminRoutes from './src/routes-admin.js';
@@ -53,6 +54,13 @@ export async function createServer(opts = {}) {
   const authHook = makeAuthHook(db);
   // wsHeartbeatMs 可注入（测试用短间隔验证 session 吊销断连）；默认走 hub 内置 30s。
   const hub = createWsHub({ server: app.server, db, heartbeatMs: opts.wsHeartbeatMs });
+  // TTL 清扫器：周期回收过期 clip 并广播删除。sweepIntervalMs 可注入（测试用短间隔）。
+  const sweeper = createSweeper({ db, hub, intervalMs: opts.sweepIntervalMs });
+  try {
+    sweeper.sweep(); // 启动即清一次，回收上次进程退出后已过期的 clip
+  } catch {
+    /* 启动清扫失败不应阻断服务启动，下一个定时周期会重试 */
+  }
 
   app.get('/api/health', async () => ({ ok: true, version: pkg.version }));
 
@@ -77,6 +85,7 @@ export async function createServer(opts = {}) {
   });
 
   app.addHook('onClose', async () => {
+    sweeper.stop();
     hub.close();
     try {
       db.close();
@@ -89,6 +98,7 @@ export async function createServer(opts = {}) {
     app,
     db,
     hub,
+    sweeper,
     config: cfg,
     /** 启动监听；port 0 时返回实际随机端口。 */
     async listen() {

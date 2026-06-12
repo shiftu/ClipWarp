@@ -11,7 +11,10 @@ test('认证', async (t) => {
   await t.test('health 无需认证', async () => {
     const res = await fetch(`${ctx.base}/api/health`);
     assert.equal(res.status, 200);
-    assert.deepEqual(await res.json(), { ok: true, version: '0.1.0' });
+    // 不与具体版本号耦合（避免每次 bump 都改测试）
+    const body = await res.json();
+    assert.equal(body.ok, true);
+    assert.equal(typeof body.version, 'string');
   });
 
   await t.test('首启自动创建 admin，密码文件 chmod 600', async () => {

@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS clips (
   title TEXT,
   is_pinned INTEGER NOT NULL DEFAULT 0,
   is_sensitive INTEGER NOT NULL DEFAULT 0,
+  burn_after_read INTEGER NOT NULL DEFAULT 0,
   device_label TEXT,
   created_at INTEGER NOT NULL,
   expires_at INTEGER
@@ -51,12 +52,25 @@ CREATE INDEX IF NOT EXISTS idx_clips_account_id ON clips(account_id, id DESC);
 CREATE INDEX IF NOT EXISTS idx_sessions_account ON sessions(account_id);
 `;
 
+// 增量迁移：CREATE TABLE IF NOT EXISTS 不会给已存在的旧表补列，
+// 故对 M1 旧库（无 burn_after_read 列）做幂等 ALTER。两种驱动都支持 PRAGMA table_info。
+function migrate(db) {
+  const cols = db
+    .prepare('PRAGMA table_info(clips)')
+    .all()
+    .map((c) => c.name);
+  if (!cols.includes('burn_after_read')) {
+    db.exec('ALTER TABLE clips ADD COLUMN burn_after_read INTEGER NOT NULL DEFAULT 0');
+  }
+}
+
 export async function openDb(dbFile) {
   const open = await loadDriver();
   const db = open(dbFile);
   db.exec('PRAGMA journal_mode = WAL;');
   db.exec('PRAGMA foreign_keys = ON;');
   db.exec(SCHEMA);
+  migrate(db);
   try {
     fs.chmodSync(dbFile, 0o600);
   } catch {

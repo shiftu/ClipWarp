@@ -46,7 +46,8 @@ clips(id INTEGER PRIMARY KEY AUTOINCREMENT,
       content_type TEXT NOT NULL DEFAULT 'text',-- 'text'|'json'|'url'|'code'
       title TEXT,                               -- M3: LLM 自动标题；M1 为 NULL
       is_pinned INTEGER NOT NULL DEFAULT 0,
-      is_sensitive INTEGER NOT NULL DEFAULT 0,  -- M2: secret 检测
+      is_sensitive INTEGER NOT NULL DEFAULT 0,  -- M2: secret 检测（命中遮罩）
+      burn_after_read INTEGER NOT NULL DEFAULT 0,-- M2: 阅后即焚（复制即销毁）
       device_label TEXT,                        -- 来源设备
       created_at INTEGER NOT NULL,
       expires_at INTEGER)                       -- M2: TTL；NULL = 永久

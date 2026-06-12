@@ -7,6 +7,41 @@ import AdminPanel from './AdminPanel.jsx';
 
 const PAGE_SIZE = 50;
 
+const TTL_PRESETS = [
+  { label: '永久', sec: 0 },
+  { label: '5分', sec: 300 },
+  { label: '1时', sec: 3600 },
+  { label: '1天', sec: 86400 },
+];
+
+const notExpired = (c) => c.expiresAt == null || c.expiresAt > Date.now();
+
+// 粘贴选项条：TTL 预设 + 阅后即焚开关，作用于"下一条"要发送的 clip。
+function PasteOptions({ ttlSeconds, setTtlSeconds, burn, setBurn }) {
+  return (
+    <div className="paste-options">
+      <span className="opt-label">存活</span>
+      {TTL_PRESETS.map((p) => (
+        <button
+          key={p.sec}
+          type="button"
+          className={`opt-chip${ttlSeconds === p.sec ? ' active' : ''}`}
+          onClick={() => setTtlSeconds(p.sec)}
+        >
+          {p.label}
+        </button>
+      ))}
+      <button
+        type="button"
+        className={`opt-chip burn-chip${burn ? ' active' : ''}`}
+        onClick={() => setBurn((v) => !v)}
+      >
+        🔥 阅后即焚
+      </button>
+    </div>
+  );
+}
+
 export default function Board({ account, showToast, onLogout }) {
   const [clips, setClips] = useState([]);
   const [hasMore, setHasMore] = useState(false);
@@ -18,7 +53,9 @@ export default function Board({ account, showToast, onLogout }) {
   const [fallbackOpen, setFallbackOpen] = useState(false);
   const [fallbackText, setFallbackText] = useState('');
   const [sending, setSending] = useState(false);
-  const [, setTick] = useState(0);
+  const [ttlSeconds, setTtlSeconds] = useState(0); // 下一条 clip 的 TTL（秒，0=永久）
+  const [burn, setBurn] = useState(false); // 下一条 clip 是否阅后即焚
+  const [tick, setTick] = useState(0);
 
   // 相对时间每 30s 刷新一次
   useEffect(() => {
@@ -89,11 +126,14 @@ export default function Board({ account, showToast, onLogout }) {
     async (content) => {
       setSending(true);
       try {
-        const d = await api('/api/clips', { method: 'POST', body: { content } });
+        const body = { content };
+        if (ttlSeconds > 0) body.ttlSeconds = ttlSeconds;
+        if (burn) body.burnAfterRead = true;
+        const d = await api('/api/clips', { method: 'POST', body });
         setClips((prev) =>
           prev.some((c) => c.id === d.clip.id) ? prev : [d.clip, ...prev]
         );
-        showToast('已瞬移 ⚡');
+        showToast(burn ? '已瞬移 ⚡（阅后即焚）' : '已瞬移 ⚡');
         return true;
       } catch (err) {
         if (err.error === 'content_too_large') showToast('内容超过 1MB 限制');
@@ -104,7 +144,7 @@ export default function Board({ account, showToast, onLogout }) {
         setSending(false);
       }
     },
-    [showToast]
+    [showToast, ttlSeconds, burn]
   );
 
   // 大按钮粘贴：readText 必须在点击手势内直接调用；被拒/不支持 → 降级 textarea
@@ -159,7 +199,28 @@ export default function Board({ account, showToast, onLogout }) {
   const handleCopy = useCallback(
     async (clip) => {
       const ok = await copyToClipboard(clip.content);
-      showToast(ok ? '已复制' : '复制失败');
+      if (!ok) {
+        showToast('复制失败');
+        return;
+      }
+      // 阅后即焚：复制成功即销毁——DELETE 后服务端广播 clip:deleted，全端移除。
+      if (clip.burnAfterRead) {
+        try {
+          await api(`/api/clips/${clip.id}`, { method: 'DELETE' });
+          setClips((prev) => prev.filter((c) => c.id !== clip.id));
+          showToast('已复制并销毁 🔥');
+        } catch (err) {
+          if (err.status === 404) {
+            // 服务端已不存在（被 sweeper 或他设备先销毁）= 阅后即焚目标已达成，本地也剔除
+            setClips((prev) => prev.filter((c) => c.id !== clip.id));
+            showToast('已复制并销毁 🔥');
+          } else if (err.status !== 401) {
+            showToast('已复制（销毁失败）');
+          }
+        }
+        return;
+      }
+      showToast('已复制');
     },
     [showToast]
   );
@@ -201,14 +262,15 @@ export default function Board({ account, showToast, onLogout }) {
     onLogout();
   }
 
-  // pinned 置顶区 + 普通区，均按 id 倒序
+  // pinned 置顶区 + 普通区，均按 id 倒序；客户端剔除已过期（tick 每 30s 触发重算，
+  // 即使没收到 sweeper 的 clip:deleted 广播，过期项也会在下个 tick 自动消失）。
   const pinnedClips = useMemo(
-    () => clips.filter((c) => c.isPinned).sort((a, b) => b.id - a.id),
-    [clips]
+    () => clips.filter((c) => c.isPinned && notExpired(c)).sort((a, b) => b.id - a.id),
+    [clips, tick]
   );
   const normalClips = useMemo(
-    () => clips.filter((c) => !c.isPinned).sort((a, b) => b.id - a.id),
-    [clips]
+    () => clips.filter((c) => !c.isPinned && notExpired(c)).sort((a, b) => b.id - a.id),
+    [clips, tick]
   );
 
   return (
@@ -313,6 +375,12 @@ export default function Board({ account, showToast, onLogout }) {
             rows={5}
             autoFocus
           />
+          <PasteOptions
+            ttlSeconds={ttlSeconds}
+            setTtlSeconds={setTtlSeconds}
+            burn={burn}
+            setBurn={setBurn}
+          />
           <button
             type="button"
             className="primary-btn"
@@ -325,9 +393,17 @@ export default function Board({ account, showToast, onLogout }) {
       )}
 
       {!fallbackOpen && (
-        <button type="button" className="paste-btn" onClick={handlePaste} disabled={sending}>
-          📋 粘贴
-        </button>
+        <div className="paste-dock">
+          <PasteOptions
+            ttlSeconds={ttlSeconds}
+            setTtlSeconds={setTtlSeconds}
+            burn={burn}
+            setBurn={setBurn}
+          />
+          <button type="button" className="paste-btn" onClick={handlePaste} disabled={sending}>
+            📋 粘贴
+          </button>
+        </div>
       )}
 
       {adminOpen && (

@@ -50,3 +50,13 @@ export function relativeTime(ts) {
   const d = new Date(ts);
   return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 }
+
+// TTL 剩余时间（用于过期倒计时展示）
+export function remainingTime(expiresAt) {
+  const ms = expiresAt - Date.now();
+  if (ms <= 0) return '已过期';
+  if (ms < 60 * 1000) return `剩 ${Math.ceil(ms / 1000)} 秒`;
+  if (ms < 60 * 60 * 1000) return `剩 ${Math.ceil(ms / 60000)} 分`;
+  if (ms < 24 * 60 * 60 * 1000) return `剩 ${Math.ceil(ms / 3600000)} 时`;
+  return `剩 ${Math.ceil(ms / 86400000)} 天`;
+}
