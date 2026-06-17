@@ -71,7 +71,7 @@ clips(id INTEGER PRIMARY KEY AUTOINCREMENT,
 |---|---|
 | **M1 · v0.1 核心同步** | 账号/登录/隔离、clip CRUD + pin、WS 实时广播、PWA、一键粘贴/复制、设备在线列表、规则版类型识别（json/url/code/text）、launchd 部署脚本 |
 | **M2 · v0.2 智能层** | secret 检测+遮罩、JSON 格式化/高亮、阅后即焚、TTL 过期 |
-| **M3 · v0.3 AI Native** | MCP server（clipboard_push/pull/search）、LLM 自动标题、语义搜索（接 llm-gateway） |
+| **M3 · v0.3 AI Native** | ✅ 核心两件：MCP server（clipboard_push/pull/search）+ 个人访问令牌、LLM 自动标题（接 llm-gateway，敏感内容不外发）、关键词搜索。语义搜索（embedding 向量）推后到后续小版本 |
 | **M4 · v1.0 加固发布** | 静态加密 + 可选端到端加密、历史管理、平滑升级广播 |
 
 ## M1 范围明确（YAGNI）

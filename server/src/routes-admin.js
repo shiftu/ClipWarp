@@ -68,9 +68,10 @@ export default function registerAdminRoutes(app, { db, hub, authHook }) {
         .code(400)
         .send({ error: 'cannot_delete', message: '不能删除自己或管理员账号' });
     }
-    // 级联删除 sessions + clips
+    // 级联删除 sessions + clips + api_tokens
     db.prepare('DELETE FROM sessions WHERE account_id = ?').run(target.id);
     db.prepare('DELETE FROM clips WHERE account_id = ?').run(target.id);
+    db.prepare('DELETE FROM api_tokens WHERE account_id = ?').run(target.id);
     db.prepare('DELETE FROM accounts WHERE id = ?').run(target.id);
     hub.closeAccount(target.id);
     return reply.code(204).send();

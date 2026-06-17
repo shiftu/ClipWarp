@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### M3 · v0.3.0 AI Native（核心两件）
+- MCP server（`mcp/`，stdio）：给 Claude Code 三个工具 `clipboard_push` / `clipboard_pull` / `clipboard_search`，以个人访问令牌 Bearer 认证读写自己的粘贴板（`@modelcontextprotocol/sdk` + zod）
+- 个人访问令牌（PAT）：新增 `api_tokens` 表，明文 `cw_pat_<40hex>`（仅创建时返回一次，库内只存 sha256）；`Authorization: Bearer` 与 cookie 并存认证；令牌管理需 cookie 会话（禁止用 PAT 再签发/吊销 PAT）；Web「🔑 令牌」面板创建/列出/吊销
+- LLM 自动标题：新 clip 异步调用 llm-gateway（OpenAI 兼容）生成简洁标题，落库并广播 `clip:updated`；网关未配置/超时/出错一律优雅降级，不影响核心同步
+- 隐私红线：标记为 `isSensitive` 的 clip 绝不外发 LLM —— 不起标题（语义层同理不做 embedding），secret 永远只留本地
+- 关键词搜索：`GET /api/clips/search?q=`（content/title 双字段 LIKE，元字符按字面转义，account 隔离 + 过滤过期）
+- 测试：服务端 62/62（+6 条 M3：PAT 认证/隔离、令牌管理需 cookie、吊销失效、搜索、自动标题异步落库 + 敏感不外发 + clip:updated 广播）；MCP smoke 8/8
+
 ### M2 · v0.2.0 智能层
 - Secret 检测：服务端确定性正则识别密钥/令牌/凭据（PEM/JWT/AWS/GitHub/Slack/Google/Stripe/sk-/Bearer/key=value），命中置 `is_sensitive`；前端默认遮罩，点"显示"揭开，复制无需揭开
 - JSON 格式化/高亮：json 类型默认美化（解析失败回退原文），安全 token 高亮（key/string/number/bool 着色，绝不注入 HTML），可一键切原文

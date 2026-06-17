@@ -1,6 +1,6 @@
 # ⚡ ClipWarp
 
-[![version](https://img.shields.io/badge/version-0.2.0-blue)](https://github.com/shiftu/ClipWarp/releases)
+[![version](https://img.shields.io/badge/version-0.3.0-blue)](https://github.com/shiftu/ClipWarp/releases)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![node](https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![stack](https://img.shields.io/badge/stack-Fastify%20%C2%B7%20SQLite%20%C2%B7%20ws%20%C2%B7%20React%2FVite-444)](docs/design.md)

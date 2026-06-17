@@ -4,6 +4,7 @@ import { copyToClipboard } from '../utils.js';
 import { WSClient } from '../ws.js';
 import ClipCard from './ClipCard.jsx';
 import AdminPanel from './AdminPanel.jsx';
+import TokensPanel from './TokensPanel.jsx';
 
 const PAGE_SIZE = 50;
 
@@ -50,6 +51,7 @@ export default function Board({ account, showToast, onLogout }) {
   const [devices, setDevices] = useState([]);
   const [wsOnline, setWsOnline] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [tokensOpen, setTokensOpen] = useState(false);
   const [fallbackOpen, setFallbackOpen] = useState(false);
   const [fallbackText, setFallbackText] = useState('');
   const [sending, setSending] = useState(false);
@@ -101,6 +103,10 @@ export default function Board({ account, showToast, onLogout }) {
             setClips((prev) =>
               prev.map((c) => (c.id === msg.id ? { ...c, isPinned: msg.pinned } : c))
             );
+            break;
+          case 'clip:updated':
+            // 自动标题等服务端更新：整条替换（仅当本地已有该 clip）
+            setClips((prev) => prev.map((c) => (c.id === msg.clip.id ? msg.clip : c)));
             break;
           default:
             break;
@@ -279,6 +285,9 @@ export default function Board({ account, showToast, onLogout }) {
         <div className="topbar-row">
           <span className="logo-text">⚡ ClipWarp</span>
           <span className="spacer" />
+          <button type="button" className="ghost-btn" onClick={() => setTokensOpen(true)}>
+            🔑 令牌
+          </button>
           {account.role === 'admin' && (
             <button type="button" className="ghost-btn" onClick={() => setAdminOpen(true)}>
               账号管理
@@ -408,6 +417,9 @@ export default function Board({ account, showToast, onLogout }) {
 
       {adminOpen && (
         <AdminPanel onClose={() => setAdminOpen(false)} showToast={showToast} />
+      )}
+      {tokensOpen && (
+        <TokensPanel onClose={() => setTokensOpen(false)} showToast={showToast} />
       )}
     </div>
   );

@@ -1,9 +1,9 @@
 {
   "name": "clipwarp-server",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "ClipWarp server (M2) — AI Native cloud clipboard",
+  "description": "ClipWarp server (M3) — AI Native cloud clipboard",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",

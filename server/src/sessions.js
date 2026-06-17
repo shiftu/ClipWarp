@@ -1,5 +1,6 @@
 // Session：cw_session cookie，32 字节随机 hex，30 天过期，存 DB 可吊销，过期惰性清理。
 import crypto from 'node:crypto';
+import { resolveApiToken } from './api-tokens.js';
 
 export const COOKIE_NAME = 'cw_session';
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 天
@@ -74,23 +75,52 @@ export function parseCookieHeader(header) {
   return out;
 }
 
+/** 从 Authorization: Bearer <token> 取出 token（不区分大小写的 scheme）。 */
+function bearerToken(req) {
+  const h = req.headers?.authorization;
+  if (typeof h !== 'string') return null;
+  const m = /^Bearer\s+(.+)$/i.exec(h.trim());
+  return m ? m[1].trim() : null;
+}
+
 /**
- * fastify preHandler：校验 cw_session，挂 req.account / req.session。
+ * fastify preHandler：先认 cw_session cookie，再认 Bearer 个人访问令牌（PAT）。
+ * 成功挂 req.account / req.session / req.authVia（'cookie' | 'token'）。
+ * PAT 请求没有真实 session 行，故 req.session 为合成对象（仅含 account_id / device_label）。
  * 未认证 → 401 {"error":"unauthorized"}。
  */
 export function makeAuthHook(db) {
   return async function authHook(req, reply) {
-    const token = req.cookies?.[COOKIE_NAME];
-    const session = getValidSession(db, token);
-    if (!session) {
-      return reply.code(401).send({ error: 'unauthorized', message: '未登录或会话已过期' });
+    // 1) cookie session
+    const cookieToken = req.cookies?.[COOKIE_NAME];
+    const session = getValidSession(db, cookieToken);
+    if (session) {
+      const account = db.prepare('SELECT * FROM accounts WHERE id = ?').get(session.account_id);
+      if (account) {
+        req.session = session;
+        req.account = account;
+        req.authVia = 'cookie';
+        return;
+      }
+      deleteSession(db, cookieToken);
     }
-    const account = db.prepare('SELECT * FROM accounts WHERE id = ?').get(session.account_id);
-    if (!account) {
-      deleteSession(db, token);
-      return reply.code(401).send({ error: 'unauthorized', message: '未登录或会话已过期' });
+
+    // 2) Bearer 个人访问令牌
+    const bearer = bearerToken(req);
+    if (bearer) {
+      const resolved = resolveApiToken(db, bearer);
+      if (resolved) {
+        req.account = resolved.account;
+        // 合成 session：device_label 用 token 标签（便于在设备列表里识别 MCP 来源）
+        req.session = {
+          account_id: resolved.account.id,
+          device_label: resolved.tokenRow.label || 'MCP',
+        };
+        req.authVia = 'token';
+        return;
+      }
     }
-    req.session = session;
-    req.account = account;
+
+    return reply.code(401).send({ error: 'unauthorized', message: '未登录或会话已过期' });
   };
 }

@@ -56,6 +56,8 @@ export default function ClipCard({ clip, onCopy, onPin, onDelete }) {
         </span>
       </header>
 
+      {clip.title && !masked && <div className="clip-title">✨ {clip.title}</div>}
+
       {masked ? (
         <div className="clip-masked" onClick={() => setRevealed(true)}>
           <span className="masked-dots">•••• •••• 已遮蔽敏感内容 •••• ••••</span>

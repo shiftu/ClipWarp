@@ -4,9 +4,17 @@ import os from 'node:os';
 import path from 'node:path';
 import { createServer } from '../index.js';
 
-export async function startServer() {
+export async function startServer(opts = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'clipwarp-test-'));
-  const srv = await createServer({ home, port: 0, host: '127.0.0.1' });
+  const srv = await createServer({
+    home,
+    port: 0,
+    host: '127.0.0.1',
+    // 测试默认禁用 LLM：否则会读到本机 ~/.config/llm-gateway/token 并对真实网关发请求（慢且不确定）。
+    // 需要测自动标题的用例可传入自己的假 llm（{ enabled:true, generateTitle }）。
+    llm: opts.llm ?? { enabled: false, generateTitle: async () => null },
+    ...opts,
+  });
   const { port } = await srv.listen();
   const base = `http://127.0.0.1:${port}`;
   return {

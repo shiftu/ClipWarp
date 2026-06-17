@@ -1,0 +1,21 @@
+{
+  "name": "clipwarp-mcp",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone stdio MCP server for ClipWarp — push/pull/search clips over its HTTP REST API.",
+  "bin": {
+    "clipwarp-mcp": "index.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "zod": "4.4.3"
+  }
+}

@@ -965,3 +965,43 @@ textarea {
 .j.jb {
   color: #c084fc;
 } /* bool / null */
+
+/* ===== M3：自动标题 + 令牌面板 ===== */
+.clip-title {
+  margin: 2px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #c4b5fd;
+  letter-spacing: 0.2px;
+}
+.token-reveal {
+  margin: 8px 0 12px;
+  padding: 12px;
+  border: 1px solid #7c3aed;
+  border-radius: 10px;
+  background: rgba(124, 58, 237, 0.12);
+}
+.token-reveal-hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #fbbf24;
+}
+.token-value {
+  display: block;
+  word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  color: #e5e7eb;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 8px 10px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+.modal-hint code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 5px;
+  border-radius: 4px;
+  word-break: break-all;
+}

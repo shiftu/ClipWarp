@@ -24,7 +24,29 @@ function toClip(row) {
   };
 }
 
-export default function registerClipRoutes(app, { db, hub, authHook }) {
+// 转义 LIKE 元字符（% _ \），配合 ESCAPE '\\' 使用户输入按字面匹配。
+function escapeLike(s) {
+  return s.replace(/[\\%_]/g, (c) => '\\' + c);
+}
+
+// 自动标题：fire-and-forget，绝不阻塞响应、绝不外溢异常、绝不处理敏感内容（由调用方保证 !isSensitive）。
+function scheduleAutoTitle({ db, hub, llm, accountId, clipId, content }) {
+  (async () => {
+    const title = await llm.generateTitle(content);
+    if (!title) return;
+    // 仅当 clip 仍在且尚无标题时写入（可能已被焚毁/删除/已起过标题）。
+    const info = db
+      .prepare('UPDATE clips SET title = ? WHERE id = ? AND account_id = ? AND title IS NULL')
+      .run(title, clipId, accountId);
+    if (!info.changes) return;
+    const row = db
+      .prepare('SELECT * FROM clips WHERE id = ? AND account_id = ?')
+      .get(clipId, accountId);
+    if (row) hub.broadcast(accountId, { type: 'clip:updated', clip: toClip(row) });
+  })().catch(() => {});
+}
+
+export default function registerClipRoutes(app, { db, hub, authHook, llm }) {
   app.get('/api/clips', { preHandler: authHook }, async (req) => {
     const accountId = req.account.id;
     let limit = Number.parseInt(req.query?.limit, 10);
@@ -50,6 +72,25 @@ export default function registerClipRoutes(app, { db, hub, authHook }) {
     }
     const hasMore = rows.length > limit;
     return { clips: rows.slice(0, limit).map(toClip), hasMore };
+  });
+
+  // 关键词搜索（M3）：account 隔离 + 过滤过期；content/title 双字段 LIKE，字面匹配。
+  app.get('/api/clips/search', { preHandler: authHook }, async (req, reply) => {
+    const accountId = req.account.id;
+    const q = typeof req.query?.q === 'string' ? req.query.q.trim() : '';
+    if (!q) {
+      return reply.code(400).send({ error: 'empty_query', message: '搜索词不能为空' });
+    }
+    let limit = Number.parseInt(req.query?.limit, 10);
+    if (!Number.isFinite(limit) || limit <= 0) limit = DEFAULT_LIMIT;
+    if (limit > MAX_LIMIT) limit = MAX_LIMIT;
+    const like = '%' + escapeLike(q) + '%';
+    const rows = db
+      .prepare(
+        "SELECT * FROM clips WHERE account_id = ? AND (expires_at IS NULL OR expires_at > ?) AND (content LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\') ORDER BY id DESC LIMIT ?"
+      )
+      .all(accountId, Date.now(), like, like, limit);
+    return { clips: rows.map(toClip) };
   });
 
   app.post('/api/clips', { preHandler: authHook }, async (req, reply) => {
@@ -105,6 +146,12 @@ export default function registerClipRoutes(app, { db, hub, authHook }) {
       .get(Number(info.lastInsertRowid), accountId);
     const clip = toClip(row);
     hub.broadcast(accountId, { type: 'clip:new', clip });
+
+    // 自动标题（M3）：异步、非阻塞、可降级。secret 红线 —— isSensitive 内容绝不外发给 LLM。
+    if (llm?.enabled && !isSensitive) {
+      scheduleAutoTitle({ db, hub, llm, accountId, clipId: clip.id, content });
+    }
+
     return reply.code(201).send({ clip });
   });
 

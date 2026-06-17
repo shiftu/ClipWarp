@@ -13,9 +13,11 @@ import { bootstrapAdmin } from './src/accounts.js';
 import { makeAuthHook } from './src/sessions.js';
 import { createWsHub } from './src/wshub.js';
 import { createSweeper } from './src/sweeper.js';
+import { createLlmClient } from './src/llm.js';
 import registerAuthRoutes from './src/routes-auth.js';
 import registerClipRoutes from './src/routes-clips.js';
 import registerAdminRoutes from './src/routes-admin.js';
+import registerTokenRoutes from './src/routes-tokens.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
@@ -62,11 +64,15 @@ export async function createServer(opts = {}) {
     /* 启动清扫失败不应阻断服务启动，下一个定时周期会重试 */
   }
 
+  // LLM 网关客户端（自动标题）。未配置 token 时 enabled=false，全程优雅降级。
+  const llm = opts.llm ?? createLlmClient();
+
   app.get('/api/health', async () => ({ ok: true, version: pkg.version }));
 
   registerAuthRoutes(app, { db, authHook, secureCookie: cfg.secureCookie });
-  registerClipRoutes(app, { db, hub, authHook });
+  registerClipRoutes(app, { db, hub, authHook, llm });
   registerAdminRoutes(app, { db, hub, authHook });
+  registerTokenRoutes(app, { db, authHook });
 
   // 生产静态托管：web/dist 存在才挂载；SPA fallback 不拦截 /api/* 与 /ws
   const hasWebDist = fs.existsSync(path.join(WEB_DIST, 'index.html'));

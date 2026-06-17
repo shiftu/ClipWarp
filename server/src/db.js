@@ -48,8 +48,17 @@ CREATE TABLE IF NOT EXISTS clips (
   created_at INTEGER NOT NULL,
   expires_at INTEGER
 );
+CREATE TABLE IF NOT EXISTS api_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id INTEGER NOT NULL,
+  token_hash TEXT UNIQUE NOT NULL,
+  label TEXT,
+  created_at INTEGER NOT NULL,
+  last_used_at INTEGER
+);
 CREATE INDEX IF NOT EXISTS idx_clips_account_id ON clips(account_id, id DESC);
 CREATE INDEX IF NOT EXISTS idx_sessions_account ON sessions(account_id);
+CREATE INDEX IF NOT EXISTS idx_api_tokens_account ON api_tokens(account_id);
 `;
 
 // 增量迁移：CREATE TABLE IF NOT EXISTS 不会给已存在的旧表补列，
