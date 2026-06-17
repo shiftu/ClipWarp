@@ -1,5 +1,11 @@
 # ⚡ ClipWarp
 
+[![version](https://img.shields.io/badge/version-0.2.0-blue)](https://github.com/shiftu/ClipWarp/releases)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![node](https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![stack](https://img.shields.io/badge/stack-Fastify%20%C2%B7%20SQLite%20%C2%B7%20ws%20%C2%B7%20React%2FVite-444)](docs/design.md)
+[![PWA](https://img.shields.io/badge/PWA-installable-5A0FC8?logo=pwa&logoColor=white)](https://github.com/shiftu/ClipWarp)
+
 > AI Native 云端粘贴板 —— 文本在设备之间"瞬移"。
 
 iPhone 上粘贴一段 token / 配置 JSON / 任意文本，Mac 浏览器里实时出现、一键复制。跨设备、跨网络，多账号隔离，同账号多设备实时同步。
@@ -42,3 +48,7 @@ cd web && npm install && npm run dev
 | v0.2 | 智能层：secret 检测遮罩、JSON 高亮、阅后即焚、TTL |
 | v0.3 | AI Native：MCP server、LLM 自动标题、语义搜索 |
 | v1.0 | 加固：静态加密、端到端加密选项、平滑升级 |
+
+## License
+
+[MIT](LICENSE) © 2026 jiangtao
