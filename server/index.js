@@ -14,6 +14,8 @@ import { makeAuthHook } from './src/sessions.js';
 import { createWsHub } from './src/wshub.js';
 import { createSweeper } from './src/sweeper.js';
 import { createLlmClient } from './src/llm.js';
+import { createCrypto } from './src/crypto.js';
+import { encryptExistingClips } from './src/migrate-encrypt.js';
 import registerAuthRoutes from './src/routes-auth.js';
 import registerClipRoutes from './src/routes-clips.js';
 import registerAdminRoutes from './src/routes-admin.js';
@@ -67,10 +69,18 @@ export async function createServer(opts = {}) {
   // LLM 网关客户端（自动标题）。未配置 token 时 enabled=false，全程优雅降级。
   const llm = opts.llm ?? createLlmClient();
 
+  // 静态加密：装配主密钥；opts.cryptoKey（测试用）经 env 注入，绝不改 process.env。
+  const cryptoBox = createCrypto({
+    home: cfg.home,
+    env: opts.cryptoKey ? { ...process.env, CLIPWARP_KEY: opts.cryptoKey } : process.env,
+  });
+  // 启动一次性加密迁移：失败（含密钥自检）即抛错阻断启动（数据完整性不可带病运行）。
+  const migrateStats = encryptExistingClips({ db, crypto: cryptoBox, dbFile: cfg.dbFile });
+
   app.get('/api/health', async () => ({ ok: true, version: pkg.version }));
 
   registerAuthRoutes(app, { db, authHook, secureCookie: cfg.secureCookie });
-  registerClipRoutes(app, { db, hub, authHook, llm });
+  registerClipRoutes(app, { db, hub, authHook, llm, crypto: cryptoBox });
   registerAdminRoutes(app, { db, hub, authHook });
   registerTokenRoutes(app, { db, authHook });
 
@@ -106,6 +116,8 @@ export async function createServer(opts = {}) {
     hub,
     sweeper,
     config: cfg,
+    keySource: cryptoBox.keySource,
+    migrateStats,
     /** 启动监听；port 0 时返回实际随机端口。 */
     async listen() {
       await app.listen({ port: cfg.port, host: opts.host || cfg.host });
@@ -124,6 +136,11 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const { port } = await srv.listen();
   console.log(`[clipwarp] v${pkg.version} listening on ${srv.config.host}:${port}`);
   console.log(`[clipwarp] data: ${srv.config.dbFile}`);
+  console.log(`[clipwarp] 主密钥来源: ${srv.keySource}`);
+  console.log(
+    `[clipwarp] 加密迁移：扫描 ${srv.migrateStats.scanned}，加密 ${srv.migrateStats.encrypted}` +
+      `${srv.migrateStats.backupPath ? '，备份 ' + srv.migrateStats.backupPath : ''}`
+  );
 
   const shutdown = async (sig) => {
     console.log(`[clipwarp] ${sig}，正在退出…`);

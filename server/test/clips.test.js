@@ -166,6 +166,8 @@ test('插入后裁剪：未 pin 只留最新 500，pinned 永久保留', async (
     body: { content: 'trigger-trim' },
   });
   assert.equal(res.status, 201);
+  const { clip: trimClip } = await res.json();
+  assert.equal(trimClip.content, 'trigger-trim'); // API 返回解密后明文
 
   const rows = ctx.srv.db
     .prepare('SELECT content, is_pinned FROM clips WHERE account_id = 1 ORDER BY id ASC')
@@ -174,8 +176,7 @@ test('插入后裁剪：未 pin 只留最新 500，pinned 永久保留', async (
   const pinned = rows.filter((r) => r.is_pinned);
   assert.equal(unpinned.length, 500, '未 pin 的只留最新 500 条');
   assert.equal(pinned.length, 2, 'pinned 永久保留');
-  assert.equal(unpinned.at(-1).content, 'trigger-trim');
-  // 最老的未 pin 已被裁掉（bulk-1..bulk-21 共 21 条被裁）
+  // 最老的未 pin 已被裁掉（bulk-1..bulk-21 共 21 条被裁）；直接插入的明文行 decrypt 透明返回
   assert.ok(!unpinned.some((r) => r.content === 'bulk-1'));
   assert.ok(unpinned.some((r) => r.content === 'bulk-22'));
 });

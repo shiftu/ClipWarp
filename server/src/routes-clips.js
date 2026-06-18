@@ -8,45 +8,42 @@ const KEEP_UNPINNED = 500;
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 const MAX_TTL_SECONDS = 30 * 24 * 60 * 60; // TTL 上限 30 天
+const SEARCH_CAP = 5000; // 候选行内存解密上限（保护内存；个人量级远不及，命中则告警）
 
-function toClip(row) {
-  return {
-    id: row.id,
-    content: row.content,
-    contentType: row.content_type,
-    title: row.title,
-    isPinned: !!row.is_pinned,
-    isSensitive: !!row.is_sensitive,
-    burnAfterRead: !!row.burn_after_read,
-    deviceLabel: row.device_label,
-    createdAt: row.created_at,
-    expiresAt: row.expires_at ?? null,
+function makeToClip(crypto) {
+  return function toClip(row) {
+    return {
+      id: row.id,
+      content: crypto.decrypt(row.content),
+      contentType: row.content_type,
+      title: row.title == null ? null : crypto.decrypt(row.title),
+      isPinned: !!row.is_pinned,
+      isSensitive: !!row.is_sensitive,
+      burnAfterRead: !!row.burn_after_read,
+      deviceLabel: row.device_label,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at ?? null,
+    };
   };
 }
 
-// 转义 LIKE 元字符（% _ \），配合 ESCAPE '\\' 使用户输入按字面匹配。
-function escapeLike(s) {
-  return s.replace(/[\\%_]/g, (c) => '\\' + c);
-}
-
 // 自动标题：fire-and-forget，绝不阻塞响应、绝不外溢异常、绝不处理敏感内容（由调用方保证 !isSensitive）。
-function scheduleAutoTitle({ db, hub, llm, accountId, clipId, content }) {
+function scheduleAutoTitle({ db, hub, llm, crypto, toClip, accountId, clipId, content }) {
   (async () => {
     const title = await llm.generateTitle(content);
     if (!title) return;
-    // 仅当 clip 仍在且尚无标题时写入（可能已被焚毁/删除/已起过标题）。
     const info = db
       .prepare('UPDATE clips SET title = ? WHERE id = ? AND account_id = ? AND title IS NULL')
-      .run(title, clipId, accountId);
+      .run(crypto.encrypt(title), clipId, accountId); // 加密落库
     if (!info.changes) return;
-    const row = db
-      .prepare('SELECT * FROM clips WHERE id = ? AND account_id = ?')
-      .get(clipId, accountId);
+    const row = db.prepare('SELECT * FROM clips WHERE id = ? AND account_id = ?').get(clipId, accountId);
     if (row) hub.broadcast(accountId, { type: 'clip:updated', clip: toClip(row) });
   })().catch(() => {});
 }
 
-export default function registerClipRoutes(app, { db, hub, authHook, llm }) {
+export default function registerClipRoutes(app, { db, hub, authHook, llm, crypto }) {
+  const toClip = makeToClip(crypto);
+
   app.get('/api/clips', { preHandler: authHook }, async (req) => {
     const accountId = req.account.id;
     let limit = Number.parseInt(req.query?.limit, 10);
@@ -74,7 +71,7 @@ export default function registerClipRoutes(app, { db, hub, authHook, llm }) {
     return { clips: rows.slice(0, limit).map(toClip), hasMore };
   });
 
-  // 关键词搜索（M3）：account 隔离 + 过滤过期；content/title 双字段 LIKE，字面匹配。
+  // 关键词搜索（M4）：account 隔离 + 过滤过期；内存解密后子串匹配，覆盖全部 pinned。
   app.get('/api/clips/search', { preHandler: authHook }, async (req, reply) => {
     const accountId = req.account.id;
     const q = typeof req.query?.q === 'string' ? req.query.q.trim() : '';
@@ -84,13 +81,30 @@ export default function registerClipRoutes(app, { db, hub, authHook, llm }) {
     let limit = Number.parseInt(req.query?.limit, 10);
     if (!Number.isFinite(limit) || limit <= 0) limit = DEFAULT_LIMIT;
     if (limit > MAX_LIMIT) limit = MAX_LIMIT;
-    const like = '%' + escapeLike(q) + '%';
+
+    // 候选集：该账号全部未过期 clip（含全部 pinned）。content 落盘为密文，无法 SQL LIKE，
+    // 故拉行后内存解密再子串匹配。未 pin 本就裁剪到 500，pinned 个人量级有限；CAP 仅内存保护。
     const rows = db
       .prepare(
-        "SELECT * FROM clips WHERE account_id = ? AND (expires_at IS NULL OR expires_at > ?) AND (content LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\') ORDER BY id DESC LIMIT ?"
+        'SELECT * FROM clips WHERE account_id = ? AND (expires_at IS NULL OR expires_at > ?) ORDER BY id DESC LIMIT ?'
       )
-      .all(accountId, Date.now(), like, like, limit);
-    return { clips: rows.map(toClip) };
+      .all(accountId, Date.now(), SEARCH_CAP);
+    if (rows.length === SEARCH_CAP) {
+      app.log?.warn?.(`[clipwarp] 搜索候选触达上限 ${SEARCH_CAP}（account ${accountId}），超出部分未参与匹配`);
+    }
+
+    const needle = q.toLowerCase(); // Unicode 感知小写：对非 ASCII 字母大小写不敏感（M3 ASCII-only 的轻微超集）
+    const hits = [];
+    for (const row of rows) {
+      const clip = toClip(row); // 解密 content/title（全函数，坏行原样不抛）
+      const inContent = clip.content.toLowerCase().includes(needle);
+      const inTitle = clip.title != null && clip.title.toLowerCase().includes(needle);
+      if (inContent || inTitle) {
+        hits.push(clip);
+        if (hits.length >= limit) break;
+      }
+    }
+    return { clips: hits };
   });
 
   app.post('/api/clips', { preHandler: authHook }, async (req, reply) => {
@@ -116,6 +130,7 @@ export default function registerClipRoutes(app, { db, hub, authHook, llm }) {
       expiresAt = Date.now() + Math.min(Math.floor(ttl), MAX_TTL_SECONDS) * 1000;
     }
 
+    // 元数据在明文上算，再加密写入
     const contentType = detectContentType(content);
     const isSensitive = detectSecret(content) ? 1 : 0; // 确定性 secret 检测
     const info = db
@@ -124,7 +139,7 @@ export default function registerClipRoutes(app, { db, hub, authHook, llm }) {
       )
       .run(
         accountId,
-        content,
+        crypto.encrypt(content), // 落盘密文（元数据已在明文上算完）
         contentType,
         isSensitive,
         burnAfterRead ? 1 : 0,
@@ -149,7 +164,7 @@ export default function registerClipRoutes(app, { db, hub, authHook, llm }) {
 
     // 自动标题（M3）：异步、非阻塞、可降级。secret 红线 —— isSensitive 内容绝不外发给 LLM。
     if (llm?.enabled && !isSensitive) {
-      scheduleAutoTitle({ db, hub, llm, accountId, clipId: clip.id, content });
+      scheduleAutoTitle({ db, hub, llm, crypto, toClip, accountId, clipId: clip.id, content });
     }
 
     return reply.code(201).send({ clip });
