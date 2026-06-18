@@ -1,6 +1,6 @@
 # ⚡ ClipWarp
 
-[![version](https://img.shields.io/badge/version-0.3.0-blue)](https://github.com/shiftu/ClipWarp/releases)
+[![version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/shiftu/ClipWarp/releases)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![node](https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![stack](https://img.shields.io/badge/stack-Fastify%20%C2%B7%20SQLite%20%C2%B7%20ws%20%C2%B7%20React%2FVite-444)](docs/design.md)
@@ -34,6 +34,16 @@ cd web && npm install && npm run dev
 环境变量：`PORT`（默认 2547）、`HOST`（默认 0.0.0.0）、`CLIPWARP_HOME`（数据目录，默认 `~/.config/clipwarp`）。
 
 > ⚠️ `navigator.clipboard` 需要 HTTPS（或 localhost）。生产环境请挂在反向代理后提供 HTTPS。
+
+## 加密与密钥（v1.0.0）
+
+ClipWarp v1.0.0 起，所有 clip 内容以 **AES-256-GCM** 静态加密落盘，服务端读取时透明解密，功能无变化。
+
+- **master.key 保管**：首启自动生成 `~/.config/clipwarp/master.key`（权限 600）。**请备份此文件**，丢失后历史数据将无法解密。
+- **CLIPWARP\_KEY 注入**：可通过环境变量 `CLIPWARP_KEY`（64 位十六进制或 32 字节 base64）覆盖 master.key，适合容器/CI 场景。
+- **与数据分目录**：master.key 位于 `~/.config/clipwarp/`，数据库位于 `~/.config/clipwarp/data/`，可分开备份、分开权限管控。
+- **升级前备份**：升级到 v1.0.0 前请备份 `clipwarp.db` 与 `master.key`；迁移脚本亦会自动产生 `clipwarp.db.pre-m4.bak`。
+- **不可平滑回退**：一旦迁移完成，旧版本（< v1.0.0）无法读取加密后的数据库，回退需恢复备份。
 
 ## 文档
 

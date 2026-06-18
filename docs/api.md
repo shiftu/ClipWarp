@@ -54,9 +54,9 @@ Clip 对象：
 倒序（最新在前）。`limit` 默认 50 最大 200；`before` 为游标（返回 id < before 的）。pinned 不影响排序（仍按 id 倒序，前端可置顶展示）。
 - 200：`{ "clips": [Clip...], "hasMore": true }`
 
-### GET /api/clips/search?q=<词>&limit=50（M3）
+### GET /api/clips/search?q=<词>&limit=50（M3+M4）
 
-关键词搜索，account 隔离 + 过滤已过期。`content` 与 `title` 双字段 `LIKE %q%`，`q` 中的 `% _ \` 按字面转义。`limit` 默认 50 最大 200，倒序。
+关键词搜索，account 隔离 + 过滤已过期。实现为**服务端内存过滤**：从库中读取全部 pinned 及最近若干条解密后，在内存中做字面子串匹配（Unicode 大小写不敏感）。`q` 中的特殊字符按字面处理，无需 SQL 转义。`limit` 默认 50 最大 200，倒序。
 - 200：`{ "clips": [Clip...] }`
 - 400：`{"error":"empty_query"}`（q 为空）
 

@@ -107,19 +107,23 @@ fi
 launchctl kickstart -k "gui/$UID_NUM/$LABEL" 2>/dev/null || true
 
 # 7) 健康检查（绑定到具体网卡时不能 curl 127.0.0.1，否则会误报失败）
-sleep 2
 case "$HOSTBIND" in
   0.0.0.0|""|::) HEALTH_HOST="127.0.0.1" ;;
   *) HEALTH_HOST="$HOSTBIND" ;;
 esac
-if curl -fsS "http://$HEALTH_HOST:$PORT/api/health" >/dev/null 2>&1; then
-  echo "==> ✅ 已部署并在线：http://localhost:$PORT  (LAN: http://$(ipconfig getifaddr en0 2>/dev/null || echo '<本机IP>'):$PORT)"
-  echo "    日志: $LOG_DIR/stdout.log  |  停止/卸载: ./scripts/undeploy-launchd.sh"
-  if [ -f "$DATA_ROOT/initial-admin-password.txt" ]; then
-    echo "    初始 admin 密码: $DATA_ROOT/initial-admin-password.txt"
-  fi
-else
-  echo "!! 健康检查未通过，请查看日志: $LOG_DIR/stderr.log" >&2
+# 健康检查：重试 ~15s，容忍升级后首启的一次性加密迁移耗时
+ok=0
+for i in $(seq 1 10); do
+  if curl -fsS "http://$HEALTH_HOST:${PORT:-2547}/api/health" >/dev/null 2>&1; then ok=1; break; fi
+  sleep 1.5
+done
+if [ "$ok" != "1" ]; then
+  echo "健康检查失败：服务未在预期时间内就绪" >&2
   tail -n 20 "$LOG_DIR/stderr.log" 2>/dev/null || true
   exit 1
+fi
+echo "==> ✅ 已部署并在线：http://localhost:$PORT  (LAN: http://$(ipconfig getifaddr en0 2>/dev/null || echo '<本机IP>'):$PORT)"
+echo "    日志: $LOG_DIR/stdout.log  |  停止/卸载: ./scripts/undeploy-launchd.sh"
+if [ -f "$DATA_ROOT/initial-admin-password.txt" ]; then
+  echo "    初始 admin 密码: $DATA_ROOT/initial-admin-password.txt"
 fi

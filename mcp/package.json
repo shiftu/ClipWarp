@@ -1,6 +1,6 @@
 {
   "name": "clipwarp-mcp",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "Standalone stdio MCP server for ClipWarp — push/pull/search clips over its HTTP REST API.",

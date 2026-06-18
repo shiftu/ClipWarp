@@ -1,6 +1,15 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.0] - 2026-06-18
+
+### M4 · v1.0.0 加固发布
+- 静态加密（at-rest）：clip `content`/`title` 以 AES-256-GCM 落盘（每条随机 IV + 认证标签），服务端仍读明文，secret 检测/自动标题/搜索全部保留
+- 主密钥：首启自动生成 `~/.config/clipwarp/master.key`（chmod 600，与 `data/` 分目录便于分开备份）；`CLIPWARP_KEY`（64-hex 或 32 字节 base64）可注入覆盖
+- 一次性迁移：升级首启把存量明文就地加密；前置密钥自检（错密钥直接 fail-fast 不损坏数据）+ 自动备份 `clipwarp.db.pre-m4.bak`
+- 搜索：改内存解密过滤（覆盖全部 pinned，Unicode 大小写不敏感）
+- 平滑升级广播：关停先向在线设备广播「升级中」，前端切琥珀重连横幅，骑指数退避重连穿过 bind 间隙
+- ⚠️ 升级不可平滑回退：迁移后旧版本无法解密；升级前请备份 `clipwarp.db` 与 `master.key`（迁移亦自动产 `*.pre-m4.bak`）
+- 测试：服务端全绿（新增 crypto / 迁移 / m4 端到端 ~25 用例）
 
 ### M3 · v0.3.0 AI Native（核心两件）
 - MCP server（`mcp/`，stdio）：给 Claude Code 三个工具 `clipboard_push` / `clipboard_pull` / `clipboard_search`，以个人访问令牌 Bearer 认证读写自己的粘贴板（`@modelcontextprotocol/sdk` + zod）
