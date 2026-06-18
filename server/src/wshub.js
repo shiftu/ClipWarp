@@ -29,6 +29,16 @@ export function createWsHub({ server, db, heartbeatMs = HEARTBEAT_MS }) {
     }
   }
 
+  // 向所有账号房间的所有 OPEN 连接广播同一帧（升级公告等全局通知）。
+  function broadcastAll(payload) {
+    const text = JSON.stringify(payload);
+    for (const room of rooms.values()) {
+      for (const ws of room) {
+        if (ws.readyState === ws.OPEN) ws.send(text);
+      }
+    }
+  }
+
   function joinRoom(ws) {
     const { accountId } = ws.meta;
     let room = rooms.get(accountId);
@@ -169,5 +179,5 @@ export function createWsHub({ server, db, heartbeatMs = HEARTBEAT_MS }) {
     wss.close();
   }
 
-  return { broadcast, devices, closeAccount, close };
+  return { broadcast, broadcastAll, devices, closeAccount, close };
 }

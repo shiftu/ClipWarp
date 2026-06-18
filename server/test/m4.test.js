@@ -144,3 +144,27 @@ test('搜索：pinned 永远可搜（不被普通量裁剪挤掉）', async () =
     await ctx.cleanup();
   }
 });
+
+test('broadcastAll：向所有在线连接广播 sys/upgrading', async () => {
+  const ctx = await startServer({ cryptoKey: KEY });
+  const { WebSocket } = await import('ws');
+  try {
+    const { cookie } = await login(ctx.base, 'admin', ctx.adminPassword);
+    const wsUrl = ctx.base.replace('http', 'ws') + '/ws';
+    const ws = new WebSocket(wsUrl, { headers: { cookie } });
+    await new Promise((res, rej) => { ws.on('open', res); ws.on('error', rej); });
+    const got = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('timeout')), 3000);
+      ws.on('message', (buf) => {
+        const msg = JSON.parse(buf.toString());
+        if (msg.type === 'sys' && msg.kind === 'upgrading') { clearTimeout(timer); resolve(msg); }
+      });
+    });
+    ctx.srv.hub.broadcastAll({ type: 'sys', kind: 'upgrading' });
+    const msg = await got;
+    assert.equal(msg.kind, 'upgrading');
+    ws.close();
+  } finally {
+    await ctx.cleanup();
+  }
+});

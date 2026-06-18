@@ -142,9 +142,21 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       `${srv.migrateStats.backupPath ? '，备份 ' + srv.migrateStats.backupPath : ''}`
   );
 
+  let closing = false;
   const shutdown = async (sig) => {
+    if (closing) return; // 重入守卫：二次 SIGTERM 不重复广播/关闭
+    closing = true;
     console.log(`[clipwarp] ${sig}，正在退出…`);
-    await srv.close();
+    try {
+      srv.hub.broadcastAll({ type: 'sys', kind: 'upgrading' }); // 先告知在线设备「升级中」
+    } catch {
+      /* 广播失败不阻断退出 */
+    }
+    const drainMs = Number(process.env.CLIPWARP_SHUTDOWN_DRAIN_MS) > 0
+      ? Number(process.env.CLIPWARP_SHUTDOWN_DRAIN_MS)
+      : 400;
+    await new Promise((r) => setTimeout(r, drainMs)); // 留窗口让帧发出
+    await srv.close(); // 触发 onClose：sweeper.stop + hub.close + db.close
     process.exit(0);
   };
   process.on('SIGINT', () => shutdown('SIGINT'));
