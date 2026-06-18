@@ -50,6 +50,8 @@ export default function Board({ account, showToast, onLogout }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [devices, setDevices] = useState([]);
   const [wsOnline, setWsOnline] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
+  const everConnected = useRef(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [tokensOpen, setTokensOpen] = useState(false);
   const [fallbackOpen, setFallbackOpen] = useState(false);
@@ -108,15 +110,21 @@ export default function Board({ account, showToast, onLogout }) {
             // 自动标题等服务端更新：整条替换（仅当本地已有该 clip）
             setClips((prev) => prev.map((c) => (c.id === msg.clip.id ? msg.clip : c)));
             break;
+          case 'sys':
+            if (msg.kind === 'upgrading') setUpgrading(true);
+            break;
           default:
             break;
         }
       },
-      onOpen: () => {
+      onOpen: (isReconnect) => {
+        everConnected.current = true;
         setWsOnline(true);
+        setUpgrading(false); // 重连成功，撤掉升级/断连横幅
         // 每次 WS 连上都重新拉全量对齐：首连可补上"挂载拉取快照→WS 订阅"之间产生的 clip，
         // 重连可补上断线期间的增量。clip:new 按 id 去重，多拉一次无副作用。
         loadClips();
+        void isReconnect; // 当前无需区分首连/重连，保留参数语义
       },
       onClose: () => {
         setWsOnline(false);
@@ -281,6 +289,11 @@ export default function Board({ account, showToast, onLogout }) {
 
   return (
     <div className="board">
+      {(upgrading || (everConnected.current && !wsOnline)) && (
+        <div className="conn-banner">
+          {upgrading ? '服务升级中，稍候自动重连…' : '连接已断开，正在重连…'}
+        </div>
+      )}
       <header className="topbar">
         <div className="topbar-row">
           <span className="logo-text">⚡ ClipWarp</span>
