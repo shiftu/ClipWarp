@@ -18,6 +18,20 @@ test('跨设备登录：设备授权码全流程', async (t) => {
   const ctx = await startServer();
   t.after(() => ctx.cleanup());
 
+  await t.test('反代场景：无 body / 未知 content-type 的 POST 不再 415（线上 Cloudflare 回归）', async () => {
+    // 浏览器 fetch(POST, 无 body) 不带 content-type，经 Cloudflare 转发会触发 Fastify 默认 415。
+    // 兜底解析器须把这类请求当作空体放行。
+    const noCt = await post(ctx.base, '/api/auth/device/code'); // helper 仍带 json 头，单独再测裸 POST：
+    assert.equal(noCt.status, 200);
+    const bare = await fetch(`${ctx.base}/api/auth/device/code`, { method: 'POST' }); // 无 content-type
+    assert.equal(bare.status, 200);
+    const unknownCt = await fetch(`${ctx.base}/api/auth/device/code`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/octet-stream' },
+    });
+    assert.equal(unknownCt.status, 200);
+  });
+
   await t.test('新设备申请授权码：返回 device_code/user_code/verification_uri', async () => {
     const res = await post(ctx.base, '/api/auth/device/code');
     assert.equal(res.status, 200);

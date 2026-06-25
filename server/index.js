@@ -55,6 +55,14 @@ export async function createServer(opts = {}) {
 
   await app.register(fastifyCookie);
 
+  // 兜底内容解析：反代（如 Cloudflare）会给「无 body 的 POST」附加 content-type/分块框架，
+  // 触发 Fastify 默认的 415（本地直连无此问题，故仅线上暴露：无 body 的 device/code、logout 等会失败）。
+  // 对未命中内置解析器的请求：空 body 一律视作 {}，非空 body 原样透传给路由（各路由均用可选链读取）。
+  app.addContentTypeParser('*', { parseAs: 'buffer' }, (req, body, done) => {
+    if (!body || body.length === 0) return done(null, {});
+    done(null, body);
+  });
+
   const authHook = makeAuthHook(db);
   // wsHeartbeatMs 可注入（测试用短间隔验证 session 吊销断连）；默认走 hub 内置 30s。
   const hub = createWsHub({ server: app.server, db, heartbeatMs: opts.wsHeartbeatMs });
