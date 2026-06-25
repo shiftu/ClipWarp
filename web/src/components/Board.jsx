@@ -5,6 +5,7 @@ import { WSClient } from '../ws.js';
 import ClipCard from './ClipCard.jsx';
 import AdminPanel from './AdminPanel.jsx';
 import TokensPanel from './TokensPanel.jsx';
+import QrPopup from './QrPopup.jsx';
 
 const PAGE_SIZE = 50;
 
@@ -54,6 +55,7 @@ export default function Board({ account, showToast, onLogout }) {
   const everConnected = useRef(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [tokensOpen, setTokensOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
   const [fallbackOpen, setFallbackOpen] = useState(false);
   const [fallbackText, setFallbackText] = useState('');
   const [sending, setSending] = useState(false);
@@ -298,6 +300,9 @@ export default function Board({ account, showToast, onLogout }) {
         <div className="topbar-row">
           <span className="logo-text">⚡ ClipWarp</span>
           <span className="spacer" />
+          <button type="button" className="ghost-btn" onClick={() => setQrOpen(true)}>
+            📱 扫码
+          </button>
           <button type="button" className="ghost-btn" onClick={() => setTokensOpen(true)}>
             🔑 令牌
           </button>
@@ -434,6 +439,7 @@ export default function Board({ account, showToast, onLogout }) {
       {tokensOpen && (
         <TokensPanel onClose={() => setTokensOpen(false)} showToast={showToast} />
       )}
+      {qrOpen && <QrPopup onClose={() => setQrOpen(false)} />}
     </div>
   );
 }

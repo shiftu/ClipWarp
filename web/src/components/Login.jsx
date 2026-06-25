@@ -76,6 +76,9 @@ export default function Login({ onLogin }) {
             {busy ? '登录中…' : '进入 ClipWarp'}
           </button>
         </form>
+        <a className="login-device-link" href="#/device-auth">
+          📲 在其他设备授权登录（免密码）
+        </a>
       </div>
     </div>
   );

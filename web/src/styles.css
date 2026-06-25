@@ -1018,3 +1018,134 @@ textarea {
   background: rgba(255, 196, 0, 0.92);
   border-bottom: 1px solid rgba(122, 79, 1, 0.25);
 }
+
+/* ---------- 设备授权页 / 扫码登录 ---------- */
+.login-device-link {
+  display: block;
+  margin: 18px auto 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--dim);
+  text-decoration: none;
+}
+.login-device-link:hover {
+  color: var(--text);
+}
+
+.device-card {
+  text-align: center;
+}
+
+.device-brand {
+  margin-bottom: 20px;
+}
+.device-logo {
+  font-size: 40px;
+  line-height: 1;
+}
+.device-title {
+  margin: 10px 0 4px;
+  font-size: 20px;
+}
+.device-sub {
+  margin: 0;
+  font-size: 13px;
+  color: var(--dim);
+}
+
+.device-prompt {
+  font-size: 15px;
+  margin: 0 0 16px;
+}
+.device-code-inline,
+.device-code-big {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.12em;
+}
+.device-code-big {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 6px 0 16px;
+}
+
+.device-card .primary-btn {
+  width: 100%;
+  margin-top: 4px;
+}
+.device-back {
+  display: inline-block;
+  margin-top: 14px;
+}
+
+.device-ok {
+  font-size: 18px;
+  color: #34d399;
+  margin: 10px 0;
+}
+.device-done {
+  text-align: center;
+}
+.device-waiting {
+  color: var(--dim);
+}
+
+/* 二维码块（设备授权页 + 扫码弹窗共用） */
+.qr-image-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 4px 0 14px;
+}
+.qr-image {
+  width: 200px;
+  height: 200px;
+  border-radius: 12px;
+  background: #fff;
+  padding: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.qr-loading {
+  text-align: center;
+  padding: 32px 0;
+  color: var(--dim);
+  font-size: 14px;
+}
+.qr-steps {
+  text-align: left;
+  margin: 0 auto 12px;
+  padding-left: 20px;
+  max-width: 280px;
+  font-size: 13px;
+  color: var(--dim);
+  line-height: 1.7;
+}
+.qr-steps strong {
+  color: var(--text);
+}
+.qr-note {
+  font-size: 12px;
+  color: var(--dim);
+  margin: 6px 0 0;
+}
+.qr-user {
+  text-align: center;
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+
+/* 扫码弹窗：× 关闭按钮 */
+.qr-modal {
+  text-align: center;
+}
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--dim);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.modal-close:hover {
+  color: var(--text);
+}

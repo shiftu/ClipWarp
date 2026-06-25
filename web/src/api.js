@@ -35,3 +35,13 @@ export async function api(path, { method = 'GET', body } = {}) {
   }
   return data;
 }
+
+// —— 跨设备登录（设备授权码 / 扫码快速登录）——
+export const deviceCreateCode = () => api('/api/auth/device/code', { method: 'POST' });
+export const devicePoll = (device_code) =>
+  api('/api/auth/device/token', { method: 'POST', body: { device_code } });
+export const deviceApprove = (user_code) =>
+  api('/api/auth/device/approve', { method: 'POST', body: { user_code } });
+export const deviceCheck = (user_code) =>
+  api(`/api/auth/device/check?user_code=${encodeURIComponent(user_code)}`);
+export const quickLoginQr = () => api('/api/auth/quick-login-qr');

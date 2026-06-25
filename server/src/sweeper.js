@@ -5,6 +5,14 @@ const DEFAULT_INTERVAL_MS = 60_000;
 export function createSweeper({ db, hub, intervalMs = DEFAULT_INTERVAL_MS }) {
   /** 删除所有 expires_at <= now 的 clip，按账号广播删除事件。返回清除条数。 */
   function sweep(now = Date.now()) {
+    // 顺带回收过期的跨设备授权码：device_codes 仅在一次性消费时删除，过期/弃用的行不会自清，
+    // 不回收会随时间无界增长。无需广播（新设备靠轮询自行发现失效）。
+    try {
+      db.prepare('DELETE FROM device_codes WHERE expires_at <= ?').run(now);
+    } catch {
+      /* device_codes 清理失败不影响 clip 回收 */
+    }
+
     const expired = db
       .prepare('SELECT id, account_id FROM clips WHERE expires_at IS NOT NULL AND expires_at <= ?')
       .all(now);

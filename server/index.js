@@ -79,7 +79,7 @@ export async function createServer(opts = {}) {
 
   app.get('/api/health', async () => ({ ok: true, version: pkg.version }));
 
-  registerAuthRoutes(app, { db, authHook, secureCookie: cfg.secureCookie });
+  registerAuthRoutes(app, { db, authHook, secureCookie: cfg.secureCookie, home: cfg.home });
   registerClipRoutes(app, { db, hub, authHook, llm, crypto: cryptoBox });
   registerAdminRoutes(app, { db, hub, authHook });
   registerTokenRoutes(app, { db, authHook });

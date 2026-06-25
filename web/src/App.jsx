@@ -2,12 +2,28 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { api, setUnauthorizedHandler } from './api.js';
 import Login from './components/Login.jsx';
 import Board from './components/Board.jsx';
+import DeviceAuthPage from './components/DeviceAuthPage.jsx';
+
+// 从 hash（如 "#/device-auth?code=CW-XXXX"）解析 code 查询参数。
+function parseHashCode(hash) {
+  const idx = hash.indexOf('?');
+  if (idx === -1) return '';
+  return new URLSearchParams(hash.slice(idx + 1)).get('code') || '';
+}
 
 export default function App() {
   const [account, setAccount] = useState(null);
   const [checking, setChecking] = useState(true);
   const [toast, setToast] = useState(null);
+  const [hash, setHash] = useState(window.location.hash);
   const toastTimer = useRef(null);
+
+  // 极简哈希路由：监听 hashchange 切换设备授权页（无需 react-router）。
+  useEffect(() => {
+    const onHash = () => setHash(window.location.hash);
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
 
   const showToast = useCallback((msg) => {
     clearTimeout(toastTimer.current);
@@ -49,9 +65,13 @@ export default function App() {
     );
   }
 
+  const isDeviceAuth = hash.startsWith('#/device-auth');
+
   return (
     <>
-      {account ? (
+      {isDeviceAuth ? (
+        <DeviceAuthPage user={account} code={parseHashCode(hash)} onLogin={setAccount} />
+      ) : account ? (
         <Board account={account} showToast={showToast} onLogout={clearSession} />
       ) : (
         <Login onLogin={setAccount} />
